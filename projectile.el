@@ -298,6 +298,7 @@ If variable `projectile-project-name' is non-nil, this function will not be used
   '("rebar.config"       ; Rebar project file
     "project.clj"        ; Leiningen project file
     "build.boot"         ; Boot-clj project file
+    "deps.edn"           ; Clojure CLI project file
     "SConstruct"         ; Scons project file
     "pom.xml"            ; Maven project file
     "build.sbt"          ; SBT project file
@@ -794,7 +795,8 @@ at the top level of DIRECTORY."
      (lambda (dir)
        (when (and (file-directory-p dir)
                   (not (member (file-name-nondirectory dir) '(".." "."))))
-         (let ((default-directory dir))
+         (let ((default-directory dir)
+               (projectile-cached-project-root dir))
            (when (projectile-project-p)
              (projectile-add-known-project (projectile-project-root))))))
      subdirs)))
@@ -1046,7 +1048,8 @@ Files are returned as relative paths to the project root."
   :type 'string)
 
 (defcustom projectile-git-submodule-command "git submodule --quiet foreach 'echo $path' | tr '\\n' '\\0'"
-  "Command used by projectile to get the files in git submodules."
+  "Command used by projectile to list submodules of a given git repository.
+Set to nil to disable listing submodules contents."
   :group 'projectile
   :type 'string)
 
@@ -1093,7 +1096,8 @@ Files are returned as relative paths to the project root."
 (defcustom projectile-vcs-dirty-state '("edited" "unregistered" "needs-update" "needs-merge" "unlocked-changes" "conflict")
   "List of states checked by `projectile-browse-dirty-projects'.
 Possible checked states are:
-\"edited\", \"unregistered\", \"needs-update\", \"needs-merge\", unlocked-changes\" and \"conflict\",
+\"edited\", \"unregistered\", \"needs-update\", \"needs-merge\",
+\"unlocked-changes\" and \"conflict\",
 as defined in `vc.el'."
   :group 'projectile
   :type '(repeat (string))
@@ -1277,8 +1281,8 @@ dirty project list."
         (mod-proj nil))
     (while (not (= (length status) 0))
       (setq mod-proj (cons (car (pop status)) mod-proj)))
-     (projectile-completing-read "Select project: " mod-proj
-                                 :action 'projectile-vc)))
+    (projectile-completing-read "Select project: " mod-proj
+                                :action 'projectile-vc)))
 
 (defun projectile-files-via-ext-command (command)
   "Get a list of relative file names in the project root by executing COMMAND."
@@ -2306,6 +2310,8 @@ TEST-DIR which specifies the path to the tests relative to the project root."
 ;; it should be listed first).
 ;;
 ;; Ideally common project types should be checked earlier than exotic ones.
+
+;; Function-based detection project type
 (projectile-register-project-type 'haskell-cabal #'projectile-cabal-project-p
                                   :compile "cabal build"
                                   :test "cabal test"
@@ -2314,7 +2320,7 @@ TEST-DIR which specifies the path to the tests relative to the project root."
                                   :compile "go build ./..."
                                   :test "go test ./..."
                                   :test-suffix "_test")
-;; File-based project types
+;; File-based detection project types
 (projectile-register-project-type 'emacs-cask '("Cask")
                                   :compile "cask install"
                                   :test-prefix "test-"
@@ -2364,6 +2370,7 @@ TEST-DIR which specifies the path to the tests relative to the project root."
                                   :test-suffix "_SUITE")
 (projectile-register-project-type 'elixir '("mix.exs")
                                   :compile "mix compile"
+                                  :src-dir "lib/"
                                   :test "mix test"
                                   :test-suffix "_test")
 ;; JavaScript
@@ -2376,6 +2383,11 @@ TEST-DIR which specifies the path to the tests relative to the project root."
 (projectile-register-project-type 'npm '("package.json")
                                   :compile "npm install"
                                   :test "npm test")
+;; Angular
+(projectile-register-project-type 'angular '("angular.json" ".angular-cli.json")
+                                  :compile "ng build"
+                                  :run "ng serve"
+                                  :test "ng test")
 ;; Python
 (projectile-register-project-type 'django '("manage.py")
                                   :compile "python manage.py runserver"
@@ -2428,24 +2440,32 @@ TEST-DIR which specifies the path to the tests relative to the project root."
                                   :compile "boot aot"
                                   :test "boot test"
                                   :test-suffix "_test")
+(projectile-register-project-type 'clojure-cli '("deps.edn")
+                                  :test-suffix "_test")
 ;; Ruby
 (projectile-register-project-type 'ruby-rspec '("Gemfile" "lib" "spec")
                                   :compile "bundle exec rake"
+                                  :src-dir "lib/"
                                   :test "bundle exec rspec"
+                                  :test-dir "spec/"
                                   :test-suffix "_spec")
 (projectile-register-project-type 'ruby-test '("Gemfile" "lib" "test")
                                   :compile"bundle exec rake"
+                                  :src-dir "lib/"
                                   :test "bundle exec rake test"
                                   :test-suffix "_test")
 ;; Rails needs to be registered after npm, otherwise `package.json` makes it `npm`.
 ;; https://github.com/bbatsov/projectile/pull/1191
 (projectile-register-project-type 'rails-test '("Gemfile" "app" "lib" "db" "config" "test")
                                   :compile "bundle exec rails server"
+                                  :src-dir "lib/"
                                   :test "bundle exec rake test"
                                   :test-suffix "_test")
 (projectile-register-project-type 'rails-rspec '("Gemfile" "app" "lib" "db" "config" "spec")
                                   :compile "bundle exec rails server"
+                                  :src-dir "lib/"
                                   :test "bundle exec rspec"
+                                  :test-dir "spec/"
                                   :test-suffix "_spec")
 
 (defvar-local projectile-project-type nil
@@ -2810,6 +2830,24 @@ regular expression."
         (funcall ag-command search-term (projectile-project-root)))
     (error "Package 'ag' is not available")))
 
+;;;###autoload
+(defun projectile-ripgrep (search-term)
+  "Run a Ripgrep search with `SEARCH-TERM' at current project root.
+
+SEARCH-TERM is a regexp."
+  (interactive (list (projectile--read-search-string-with-default
+                      "Ripgrep search for")))
+  (if (require 'ripgrep nil 'noerror)
+      (let ((args (mapcar (lambda (val) (concat "--glob !" val))
+                          (append projectile-globally-ignored-files
+                                  projectile-globally-ignored-directories))))
+        (ripgrep-regexp search-term
+                        (projectile-project-root)
+                        (if current-prefix-arg
+                            args
+                          (cons "--fixed-strings" args))))
+    (error "Package `ripgrep' is not available")))
+
 (defun projectile-tags-exclude-patterns ()
   "Return a string with exclude patterns for ctags."
   (mapconcat (lambda (pattern) (format "--exclude=\"%s\""
@@ -2886,7 +2924,8 @@ regular expression."
 (defmacro projectile-with-default-dir (dir &rest body)
   "Invoke in DIR the BODY."
   (declare (debug t) (indent 1))
-  `(let ((default-directory ,dir))
+  `(let ((default-directory ,dir)
+         (projectile-cached-project-root nil))
      ,@body))
 
 ;;;###autoload
@@ -3119,8 +3158,17 @@ to run the replacement."
   "Open `vc-dir' at the root of the project.
 
 For git projects `magit-status-internal' is used if available.
-For hg projects `monky-status' is used if available."
-  (interactive)
+For hg projects `monky-status' is used if available.
+
+If PROJECT-ROOT is given, it is opened instead of the project
+root directory of the current buffer file.  If interactively
+called with a prefix argument, the user is prompted for a project
+directory to open."
+  (interactive (and current-prefix-arg
+                    (list
+                     (projectile-completing-read
+                      "Open project VC in: "
+                      projectile-known-projects))))
   (or project-root (setq project-root (projectile-project-root)))
   (let ((vcs (projectile-project-vcs project-root)))
     (cl-case vcs
@@ -3240,8 +3288,9 @@ to function `funcall's. Return value of function MUST be string to be executed a
   "Retrieve the configure command for COMPILE-DIR."
   (or (gethash compile-dir projectile-configure-cmd-map)
       projectile-project-configure-cmd
-      (format (projectile-default-configure-command (projectile-project-type))
-              (projectile-project-root))))
+      (let ((cmd-format-string (projectile-default-configure-command (projectile-project-type))))
+        (when cmd-format-string
+          (format cmd-format-string (projectile-project-root))))))
 
 (defun projectile-compilation-command (compile-dir)
   "Retrieve the compilation command for COMPILE-DIR."
@@ -3600,7 +3649,7 @@ See `projectile-cleanup-known-projects'."
   (unless (projectile-ignored-project-p project-root)
     (setq projectile-known-projects
           (delete-dups
-           (cons (abbreviate-file-name project-root)
+           (cons (file-name-as-directory (abbreviate-file-name project-root))
                  projectile-known-projects)))))
 
 (defun projectile-load-known-projects ()
@@ -3869,6 +3918,7 @@ is chosen."
     (define-key map (kbd "r") #'projectile-replace)
     (define-key map (kbd "R") #'projectile-regenerate-tags)
     (define-key map (kbd "s g") #'projectile-grep)
+    (define-key map (kbd "s r") #'projectile-ripgrep)
     (define-key map (kbd "s s") #'projectile-ag)
     (define-key map (kbd "S") #'projectile-save-project-buffers)
     (define-key map (kbd "t") #'projectile-toggle-between-implementation-and-test)
@@ -3934,7 +3984,6 @@ is chosen."
 
 (easy-menu-change '("Tools") "--" nil "Search Files (Grep)...")
 
-;;;###autoload
 (defcustom projectile-mode-line
   '(:eval (format " Projectile[%s]"
                   (projectile-project-name)))

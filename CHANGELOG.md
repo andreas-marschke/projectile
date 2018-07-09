@@ -4,6 +4,9 @@
 
 ### New Features
 
+* [#1243](https://github.com/bbatsov/projectile/pull/1243) Add [angular](https://angular.io) project support.
+* [#1228](https://github.com/bbatsov/projectile/pull/1228): Add support for a prefix argument to `projectile-vc`.
+* [#1221](https://github.com/bbatsov/projectile/pull/1221): Modify Ruby and Elixir project settings.
 * [#1175](https://github.com/bbatsov/projectile/pull/1175): Add a command `projectile-configure-command` for running a configuration for build systems that need that.
 * [#1168](https://github.com/bbatsov/projectile/pull/1168): Add CMake and Meson project support.
 * [#1159](https://github.com/bbatsov/projectile/pull/1159) Add [nix](http://nixos.org) project support.
@@ -14,6 +17,7 @@
 * [#1154](https://github.com/bbatsov/projectile/pull/1154) Use npm install instead of build.
 * Added the ability to expire old files list caches via `projectile-projectile-files-cache-expire`.
 * [#1204](https://github.com/bbatsov/projectile/pull/1204): `projectile-register-project-type` can now be use to customize the source and test directory via `:src-dir` and `:test-dir` for projects with custom needs (eg. maven).
+* [#1240](https://github.com/bbatsov/projectile/pull/1240): Add some integration with riggrep.
 
 ### Changes
 
@@ -36,9 +40,12 @@
 * [#987](https://github.com/bbatsov/projectile/issues/987): projectile-ag ignores ag-ignore-list when projectile-project-vcs is git
 * [#1119](https://github.com/bbatsov/projectile/issues/1119): File search ignores non-root dirs if prefixed with "*"
 * Treat members of `projectile-globally-ignored-file-suffixes` as file name suffixes (previous treat as file extensions).
+* Ensure project roots are added as directory names to avoid near-duplicate projects, e.g. "~/project/" and "~/project".
+* Don't autoload defcustoms.
 
 ### Bugs fixed
 
+* [#1222](https://github.com/bbatsov/projectile/issues/1222): `projectile-configure-project` fails for generic project type
 * [#1162](https://github.com/bbatsov/projectile/issues/1162): `projectile-ag` causes "Attempt to modify read-only object" error.
 * [#1169](https://github.com/bbatsov/projectile/issues/1169): `projectile-compile-project` does not prompt for compilation command.
 * [#1072](https://github.com/bbatsov/projectile/issues/1072): Create test files only within the project.
@@ -49,6 +56,7 @@
 * [#1011](https://github.com/bbatsov/projectile/issues/1011): Save project files before running project tests.
 * [#1099](https://github.com/bbatsov/projectile/issues/1099): Fix the behaviour of `projectile-purge-dir-from-cache`.
 * [#1067](https://github.com/bbatsov/projectile/issues/1067): Don't mess up `default-directory` after switching projects.
+* [#1246](https://github.com/bbatsov/projectile/issues/1246): Don't blow away real project file during tests.
 
 ## 0.14.0 (2016-07-08)
 
