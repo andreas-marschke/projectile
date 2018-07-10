@@ -3260,7 +3260,7 @@ to function `funcall's. Return value of function MUST be string to be executed a
     (cond
      ((stringp plist-retrieved-generic-command) plist-retrieved-generic-command)
      ((symbolp 'plist-retrieved-generic-command)
-      (if (bound-and-true-p plist-retrieved-generic-command)
+      (if (fboundp plist-retrieved-generic-command)
           (funcall (symbol-function plist-retrieved-generic-command))))
      )))
 
