@@ -704,7 +704,7 @@
   (projectile-register-project-type 'has-command-at-point '("file.txt")
                                     :compile (-compilation-test-function))
 
-  (should-error (projectile-default-compilation-command 'has-command-at-point)))
+  (should (equal nil (projectile-default-compilation-command 'has-command-at-point))))
 
 (ert-deftest projectile-test-should-not-fail-on-bad-compilation-dir-config ()
   (defun -compilation-test-function ()
